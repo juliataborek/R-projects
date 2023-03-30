@@ -10,8 +10,11 @@ Group project about time series
 - diagnostics of models and residuals,
 - predictions
 
+
 #### "projekt_indywidualny"
 Model predicting car prices
+
+
 
 Projects in Python:
 #### "projekt_rmd_numeryczne"
