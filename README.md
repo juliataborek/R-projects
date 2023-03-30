@@ -1,7 +1,7 @@
 # Rmd-projects
 January 2023
 
-Projects done in R:
+## Projects done in R:
 #### "Projekt.Rmd"
 Group project about time series
 - stationarity of the series,
@@ -16,7 +16,7 @@ Model predicting car prices
 
 
 
-Projects in Python:
+## Projects in Python:
 #### "projekt_rmd_numeryczne"
 Group project 
 - Leslie matrix,
