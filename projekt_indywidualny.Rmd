@@ -1,0 +1,286 @@
+---
+title: "Projekt"
+author: Julia Taborek
+output:
+  pdf_document: default
+---
+
+# Wstęp
+
+Celem projektu jest skonstruowanie modelu predykcyjnego przewidującego ceny samochodów za pomocą podanych zmiennych. 
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+# Zbiór danych
+
+```{r}
+train <- read.csv("train.csv")
+```
+
+
+Dane dotyczą samochodów z 2005 roku. Cena detaliczna samochodów została obliczona w oparciu o edycję Kelly Blue Book z roku 2005. 
+
+## Zmienne
+
+**Mileage:** liczba mil przejechana przez samochód
+**Make:** wytwórca samochodu (np. Saturn, Pontiac, Chevrolet)
+**Model:** model specyficzny dla każdego wytwórcy (np. Ion, Vibe, Cavalier)
+**Trim:** typ modelu samochodu (np. SE Sedan 4D, Quad Coupe 2D)
+**Type:** rodzaj nadwozia (np. sedan, coupe, etc.)
+**Cylinder:** liczba cylidrów silnika
+**Liter:** pojemność silnika
+**Doors:** liczba drzwi
+**Cruise:**  indykator wskazujący czy samochód jest wyposażony w tempomat (1 = tempomat)        
+**Sound:** indykator wskazujący czy samochód ma ulepszone głośniki (1 = ulepszone)        
+**Leather:** indykator wskazujący czy samochód ma skórzane siedzenia (1 = skórzane siedzenia) 
+
+# Zadanie
+
+Zadanie polega na opracowaniu modelu predykcyjnego. Metryką oceny jakości modelu będzie błąd średniokwadratowy obliczony na zbiorze testowym. Sześć pierwszyszych miejsc w rankingu będzie miało ocenę z laboratorium podwyższoną o pół oceny. Dodatkowo zastrzegam sobie prawo do podwyższenia oceny wybranym studentom na podstawie opisu modelu. 
+
+**Należy dostarczyć**:
+ * Plik *Przewocki.Rmd* zawierający opis tworzenia modelu (eksploracyjna analiza danych, wykresy)
+ * Plik *Przewocki_model.Rdata* zawierający model wraz z funkcją testującą (patrz przykład niżej)
+ 
+**UWAGA** W powyższych nazwach plików proszę podmienić moje nazwisko na swoje!
+
+
+
+# Funkcja testująca
+
+Jeden z plików, które należy oddać powinien zawierać końcowy model wraz z funkcją testującą o nazwie `test.function`. Funkcja ta powinna przyjmować jako argument `model` testowany model, a jako argument `df` ramkę danych o takiej samej strukturze jak dane treningowe i zwracać kolumnę predykcji. 
+
+**UWAGA** jeżeli model przyjmuje dane w postaci przekształconej (np. zostają przekształcone pewne zmienne: np. logartym, to należy uwzględnić to w funkcji testującej). 
+
+
+
+# Czyszczenie danych
+Zamiana odpowiednich zmiennych na kategoryczne
+```{r}
+train <- train %>%
+  mutate(Cruise = factor(Cruise, levels = c(`No` = 0, Yes = 1),
+                         labels = c("No", "Yes"))) %>%
+  mutate(Sound = factor(Sound, levels = c(`No` = 0, Yes = 1),
+                                labels = c("No", "Yes"))) %>%
+  mutate(Leather = factor(Leather, levels = c(`No` = 0, Yes = 1),
+                                labels = c("No", "Yes")))
+train$Make <- factor(train$Make)
+train$Model <- factor(train$Model)
+train$Trim <- factor(train$Trim)
+train$Type <- factor(train$Type)
+```
+
+# Podstawowe statystki
+```{r}
+summary(train)
+```
+Można zaobserwować, że cena samochodu waha się od 8639 do 69134. Przy czym połowa samochodów jest w cenie od 14196 do 27269 z medianą 18169. Można podejrzewać, że rozkład ceny samochodów będzie miał długie ogony.
+
+Następnie sprawdziłam korelacje zmiennych numerycznych:
+```{r}
+my_data <- train[, c(2,3,8,9,10)]
+cor(my_data)
+```
+Najlepszym predykatorem ceny są pojemność silnika i liczba cylindrów silnika.
+
+Następnia sprawdzam korelacje z zmiennymi kategorycznymi.
+
+```{r}
+cor(train$Price, as.numeric(train$Make))
+cor(train$Price, as.numeric(train$Model))
+cor(train$Price, as.numeric(train$Trim))
+cor(train$Price, as.numeric(train$Type))
+cor(train$Price, as.numeric(train$Cruise))
+cor(train$Price, as.numeric(train$Sound))
+cor(train$Price, as.numeric(train$Leather))
+```
+Najlepszym predykatorem kategorycznym jest zmienna Cruise.
+
+Tworzę model objaśniany przez najlepszy predykator - Cylinder.
+
+```{r}
+model <- lm(Price ~ factor(Cylinder), train)
+summary(model)
+confint(model)
+par(mfrow = c(2,2))
+plot(model)
+```
+Poziomem bazowym są 4 cylindry silnika. Test t pokazuje, że grupa z 6 cylindrami różni się istotnie średnią ceną od grupy bazowej - średnio ma cenę wyższą o 2327.9 (przedział ufności od 1094 do 3562) oraz grupa z 8 cylindrami różni się istotnie od grupy bazowej - średnio cena jest wyższa o 21196.9 ( przedział ufności od 19429 do 22964). Test pokazuje, że ilość cylindrów jest istotna statystycznie. Model jest lepszy od zerowego. Model wyjaśnia ~ 47% zmienności wariancji.
+
+Na podstawie wykresu diagnostycznego reszt można stwierdzić, że model jest dobrze dopasowany. Jednak wykres kwantyl - kwantyl jest niedopasowany w przypadku ekstremalnych wartości.
+
+Następnie sprawdzam model objaśniany przez 2 najlepszy predykator - Liter.
+
+```{r}
+model2 <- lm(Price ~ Liter, train)
+summary(model2)
+confint(model2)
+par(mfrow = c(2,2))
+plot(model2)
+```
+Zminena liter jest istotna staystycznie. Z wrostem pojemności silnika o jeden litr, cena samochodu rośnie średnio o 5051. Model jest gorzej dopasowany dla dużych i średnich wartośći niż poprzedni oraz objaśnia mniejszy procent wariancji. Na rozkładzie kwantyl - kwantyl mamy ciężki ogon.
+
+Następnie sprawdzam model z 2 predykatorami.
+
+```{r}
+model3 <- lm(Price ~ factor(Cylinder) + Liter, train)
+summary(model3)
+confint(model3)
+par(mfrow = c(2,2))
+plot(model3)
+```
+Dopasowanie modelu poprawiło się. Zmienna Liter wyszła nieistotna statystycznie, więc prawdopodobnie jest zależna od zmiennej Cylinder, sprawdziłam następnie model z interakcją tych 2 zmiennych.
+```{r}
+model4 <- lm(Price ~ factor(Cylinder) * Liter , train)
+summary(model4)
+confint(model4)
+par(mfrow = c(2,2))
+plot(model4)
+```
+Interakcja wyszła istotna statystycznie, a więc postanowiłam ją zostawić. Poprawił się procent wariancji objaśnianej przez model. Na wykresie kwantyl - kwantyl widzimy nadal niedopasowanie dla ekstremalnych obserwacji. Nie ma obserwacji odstających.
+
+Sprawdzam, czy objaśnianie logarytmu ceny zamiast ceny lepiej dopasuje model.
+
+```{r}
+model5 <- lm(log(Price) ~ factor(Cylinder) * Liter , train)
+summary(model5)
+confint(model5)
+par(mfrow = c(2,2))
+plot(model5)
+```
+Model jest gorzej dopasowany, co widać po wykresie diagnostycznym reszt oraz po objaśnianej wariancji, jednak wykres kwantyl - kwantyl się poprawił.
+
+Sprawdzam jak sprawdzi się model z dołożoną zmienną Cruise, która jest 3 najlepszym predykatorem.
+```{r}
+model5 <- lm(log(Price) ~ factor(Cylinder) * Liter + Cruise, train)
+summary(model5)
+confint(model5)
+par(mfrow = c(2,2))
+plot(model5)
+```
+Wprowadzenie logarytmu ceny spowodowało pogorszenie dopasowania modelu jednak poprawiło wykres kwantyl - kwantyl.
+
+Następnie sprawdzam jak zmieni się model po dodaniu następnej zmiennej z największą korelacją z ceną.
+
+```{r}
+model6 <- lm(Price ~ factor(Cylinder) * Liter + Cruise, train)
+summary(model6)
+confint(model6)
+par(mfrow = c(2,2))
+plot(model6)
+```
+Test t ukazał, że to, czy samochód posiada tempomat, czy nie wpływa istotnie na jego cenę. Średnia cena samochody wyposażonego w tempomat jest wyższa o 6080 od średniej ceny samochodu bez tempomatu.
+
+Decyduję się na model z logarytmem, ponieważ pozwala lepiej dopasować wykres kwantyl - kwantyl.
+
+```{r}
+model6 <- lm(log(Price) ~ factor(Cylinder) * Liter + Cruise, train)
+summary(model6)
+confint(model6)
+par(mfrow = c(2,2))
+plot(model6)
+```
+
+Do kolejnego modelu dodaje następny najlepszy predykator - zmienną Trim.
+```{r}
+model7 <- lm(log(Price) ~ factor(Cylinder) * Liter + Cruise + Trim, train)
+summary(model7)
+confint(model7)
+par(mfrow = c(2,2))
+plot(model7)
+```
+Dopasowanie modelu się poprawiło. Procent wariancji objaśnianej przez model wynosi 90.
+
+```{r}
+model8 <- lm(log(Price) ~ factor(Cylinder) * Liter + Cruise + Trim + Leather, train)
+summary(model8)
+confint(model8)
+par(mfrow = c(2,2))
+plot(model8)
+```
+Sprawdzam jak wyglądają wykresy:
+
+```{r}
+ggplot(train, aes(x = Liter, y = Price, color = Cruise)) +
+geom_point() + geom_smooth(method = "lm")
+ggplot(train, aes(x = Liter, y = Price, color = Leather)) +
+geom_point() + geom_smooth(method = "lm")
+```
+W pierwszym przypadku efekt zmiennej ciągłej nie zależy od poziomu zmiennej kategorycznej. Efety w obu grupach są mniej więcej takie same. W drugim przypadku efekt zmiennej ciągłej zależy od zmiennej kategorycznej.
+
+Sprawdzam interakcję tych 2 zmiennych.
+```{r}
+summary(aov(Price ~ factor(Cylinder) * Liter + Liter * Leather, data = train))
+```
+Interakcja Liter z Leather wyszła nieistotna statystycznie, więc nie wprowadzam ją do modelu.
+
+Następnie sprawdzam model z dodatkową zmienną Model.
+```{r}
+model9 <- lm(log(Price) ~ factor(Cylinder) * Liter + Leather +  Cruise + Trim + Model, train)
+summary(model9)
+confint(model9)
+par(mfrow = c(2,2))
+plot(model9)
+```
+Wprowadzenie tej zmiennej poprawiło procent wariancji wyjaśnianej przez model oraz wykres kwantyl - kwantyl.Spowodowała, że zmienne Cruise i Leather przestały być istotne statystycznie.
+
+Sprawdzam model z dołożoną zmienną Mileage.
+```{r}
+model10 <- lm(log(Price) ~ factor(Cylinder) * Liter + Leather +  Cruise + Trim +  Model + Mileage, train)
+summary(model10)
+confint(model10)
+par(mfrow = c(2,2))
+plot(model10)
+```
+Dodanie tej zmiennej zwiększyło procent wariancji wyjaśnianej przez model oraz spowodowało, że zmienna Leather jest istotna statystycznie.
+
+Sprawdzam jak wygląda wykres zależności między liczbą przejechanych mil a ceną samochodu w zależnośći od tego, czy samochód posiada tempomat, czy nie.
+```{r}
+ggplot(train, aes(x = Mileage, y = Price, color = Cruise)) +
+geom_point() + geom_smooth(method = "lm")
+```
+Efekty w obu grupach są mniej więcej takie same.
+
+Postanawiam zrezygnować z zmiennej Cruise, ponieważ wyszła niestotna statystycznie i niezależna od liczby przejechanych mil.
+
+```{r}
+model11 <- lm(log(Price) ~ factor(Cylinder) * Liter + Leather + Trim +  Model + Mileage, train)
+summary(model11)
+confint(model11)
+par(mfrow = c(2,2))
+plot(model11)
+```
+Powyższy model jest modelem ostatecznym. 
+
+```{r}
+test.function <- function(df, model) {
+  
+  # Here we can put necessary transformations of the data
+  df <- df %>%
+  mutate(Cruise = factor(Cruise, levels = c(`No` = 0, Yes = 1),
+                         labels = c("No", "Yes"))) %>%
+  mutate(Sound = factor(Sound, levels = c(`No` = 0, Yes = 1),
+                                labels = c("No", "Yes"))) %>%
+  mutate(Leather = factor(Leather, levels = c(`No` = 0, Yes = 1),
+                                labels = c("No", "Yes")))
+df$Make <- factor(df$Make)
+df$Model <- factor(df$Model)
+df$Trim <- factor(df$Trim)
+df$Type <- factor(df$Type)
+  
+ exp(predict(model, newdata = df))
+}
+
+save(model11, test.function, file = 'Taborek.Rdata')
+```
+
+```{r}
+calculate.error('Taborek.Rdata', train)
+```
+
+
+
+
