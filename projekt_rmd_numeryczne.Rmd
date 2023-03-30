@@ -1,0 +1,361 @@
+---
+title: "Numeryczne modelowanie układów dynamicznych - projekt zaliczeniowy"
+author: "Natalia Machlus i Julia Taborek"
+output: pdf_document
+date: "2023-01-21"
+---
+# ZADANIE 1
+Poniższa macierz jest macierz Lesliego dla pewnej populacji ryb podzielonej na trzy
+przedziały wiekowe.
+
+$$\begin{bmatrix}0 & 3 & 2  \\ 0.9 & 0 & 0  \\ 0 & 0.7 & 0   \end{bmatrix}$$
+
+Na koniec każdego przedziału stosowany jest połów 40% najmłodszej i 40% średniej klasy
+wiekowej. Opisz rozkład populacji po upływie długiego czasu. Odpowiedź przedstaw w
+postaci unormowanego wektora, którego współrzędne wyrażają proporcje odpowiadających im klas wiekowych.
+
+**Rozwiązanie**
+
+Przez L oznaczamy macierz Lesliego dla pewnej populacji ryb podzielonej na trzy
+przedziały wiekowe. Pierwszy wiersz oznacza ilość żeńskich potomków urodzonych średnio na jednego osobnika płci żeńskiej w danej grupie wiekowej. Wartości 0.9 i 0.7 w kolejnych wierszach oznaczają ułamek liczby osobników płci żeńskiej, które przeżyły przejście z 1 do 2 klasy i z 2 do 3 klasy.
+
+Macierz D zawiera ułamki żeńskiej populacji w poszczególnych grupach wiekowych poddanych ubojowi.
+
+Macierz C zawiera ułamki żeńskiej populacji w poszczególnych grupach wiekowuch pozostawionych przy życiu.
+
+```{python}
+import numpy as np
+import numpy.linalg as LA
+
+L = np.array([[0, 3, 2], [0.9, 0, 0], [0, 0.7, 0]])
+C = np.array([[0.6, 0, 0],[0, 0.6, 0], [0, 0, 1]]) 
+D = np.array([[0.4, 0, 0],[0, 0.4, 0], [0, 0, 0]]) 
+
+```
+
+L1 to macierz przedstawiająca rozkład populacji po uboju. Jako dL1, VL1 oznaczamy kolejno wartości i wektory własne macierzy L1.
+
+```{python}
+L1 = C@L 
+dL1, VL1 = LA.eig(L1)
+
+print('wartości własne: \n',dL1)
+print('wektory własne odpowiadające wartościom własnym: \n',VL1)
+```
+Dla macierzy Lesliego L spełnione są wszystkie założenia na istnienie jednoznacznie wyznaczonej, dodatniej wartości własnej - $\lambda_{1}$ . Zatem $\lambda_{1}$ jest pierwiastkiem jednokrotnym a odpowiadający jej wektor własny $X_{1}$ posiada współrzędne dodatnie. Ponadto $\lambda_{1}$ jest większa co do wartośći bezwzględnej od pozostałych wartości własnych.
+
+```{python}
+lambda1 = dL1[np.argmax(dL1)]
+X1 = VL1[:,np.argmax(dL1)]
+print('wartość własna dominująca: ', lambda1)
+print('wektor wlasny: ', X1) # przed unormowaniem
+```
+Po unormowaniu (sprawieniu, że współrzędne sumują się do 1) wektor $X_{1}$ determinuje docelowe proporcje w poszczególnych grupach wiekowych.
+
+```{python}
+s= X1[0] + X1[1] + X1[2]  
+print(s)
+
+#normalizacja X
+X1_norm = X1/s
+print('wektor X1 po unormowaniu: ', X1_norm)
+```
+```{python}
+print('Populacja będzie się zmieniała co roku o czynnik {} względem roku poprzedniego.'
+.format(lambda1))
+print('Proporcje poszczególnych klas wiekowych będą opisywane następującym wektorem: \n {}'
+.format(X1_norm))
+```
+Nasza lambda1 jest większa od 1, czyli po długim czasie populacja rośnie do $+{\infty}$.
+
+
+# ZADANIE 2
+Niech funkcja $T : [0, 1] -> [0, 1]$ zdefiniowana będzie następująco:
+
+$T(x) = \begin{cases} \frac{7}{4}x ,&  x \in [0, \frac{1}{2}] \\ \frac{7}{4}(1 - x), & x \in [ \frac{1}{2}, 1]\end{cases}$
+
+Przyjmijmy punkt początkowy $x_{0} = \frac{1}{5}$. Przedstaw wykres funkcji $T$ wraz z fragmentem orbity między $T^{0} = x_{0}$ a $T^{10}$. Następnie wyświetl numeryczne iteracje od $T^{200}$ do $T^{210}$. Co można powiedzieć o długofalowym zachowaniu układu? Odpowiedź uzasadnij wybranymi przez siebie metodami.
+
+**Rozwiązanie**
+
+Jako funkcję tent definiujemy funkcję namiotową.
+
+Wykres przedstawia zachowanie orbity od $T^{0} = x_{0}$ do $T^{10}$.
+
+```{python}
+import matplotlib.pyplot as plt
+from sympy import Rational
+
+def tent(mu, x):
+    return mu*(-abs(x-1/2)+1/2)
+
+x = np.linspace(0,1,200)
+
+def tent_cobweb(mu, x0, N, ax = None):
+    t = np.linspace(0,1, 200)
+    ax.plot(t, tent(mu, t), 'k')
+    ax.plot([0,1], [0,1], 'r')
+    x = x0
+    for i in range(N):
+        y = tent(mu, x)
+        ax.plot([x,x], [x,y], 'k', lw = 1)
+        ax.plot([x,y], [y,y], 'k', lw = 1)
+        ax.plot([x], [y], 'ok', alpha = (i+1)/ N)
+        x = y
+    ax.set_title(f'$\mu$ = {mu}, $x_0$={x0}' )
+
+def tent_iterations(mu, x0, N, ax = None):
+    x_orbit = [x0]
+    x = x0
+    for i in range(N-1):
+        x = tent(mu, x)
+        x_orbit.append(x)
+    plt.plot(x_orbit, 'o:r')
+    ax.set_title(f'orbita w czasie \n $\mu$ = {mu}, $x_0$ = {x0}')
+    plt.xlabel('n')
+    plt.ylabel('$x_n$')
+    
+fig, (ax1, ax2) = plt.subplots(1,2, figsize = (12,6), sharey = True)
+tent_cobweb(7/4, 0.2, 10, ax = ax1)
+tent_iterations(7/4, 0.2, 10, ax = ax2)
+plt.show()
+```
+
+Następnie wyświetliłyśmy numeryczne iteracje od $T^{200}$ do $T^{210}$.
+
+```{python}
+s = Rational(1,5)
+mu = Rational(7,4)
+t = np.linspace(0, 1, 200)
+x = np.linspace(0, 1, 200)
+
+inputs = np.array([])
+outputs = np.array([])
+inputs = np.append(inputs, s)
+outputs = np.append(outputs, 0)
+
+
+for i in range (2, 212):
+    inputs = np.append(inputs, s)
+    outputs = np.append(outputs, s)
+    inputs = np.append(inputs, s)
+    outputs = np.append(outputs, tent(mu, s))
+    #print(s)
+    s = tent(mu, s)
+    
+fig = plt.figure()
+
+plt.plot(inputs[-20:], outputs[-20:])
+plt.plot(t, tent(mu, t), 'k')
+plt.plot(x,x, 'r')
+
+plt.xlabel('x', fontsize = 10)
+plt.ylabel('T(x)', fontsize = 10)
+plt.tick_params(labelsize = 10)
+plt.show()
+```
+Teraz za pomocą wykładnika Lapunowa sprawdzimy, czy dla naszego $\mu$ zachowanie układu faktycznie jest chaotyczne.
+
+```{python}
+#to samo dla funkcji namiotowej
+def tent(mu,x):
+  return mu*(-abs(x-1/2)+1/2)#pewna duza liczba
+num_points = 16000
+#potem bedzie rozszerzana o wykladniki Lyapunova
+lyapunov = []
+#y beda mialy info potzrebne do narysowania diagramu bifurkacji
+y = []
+mu_min, mu_max = 0,2
+mult = (mu_max - mu_min)*num_points
+mu_values = np.arange(mu_min,mu_max,20/num_points) 
+for mu in mu_values:
+#punkt poczatkowy dla orbity, byle nie wybrac punktu stalego
+  x = 0.1
+  log = []
+  for i in range(100):
+    x = tent(mu,x)
+    log.append(np.log(mu))
+  lyapunov.append(np.mean(log)) #usredniamy te logarytmy z listy log
+  for t in range(20):
+    x = tent(mu,x)
+    y.append(x)
+fig = plt.figure(figsize = (10,7))
+ax1 = fig.add_subplot(1,1,1) #add subplot tworzy macierz wykresów przy (2,2,3) trzeci argument to indeks wykresu 3 to byłby lewy dolny
+xticks = np.linspace(mu_min,mu_max,mult) #mult - liczba argumentów
+zero = [0]*mult
+ax1.plot(xticks, zero,'k-',lw=3)
+ax1.plot(xticks,y,'r.',alpha=0.3,label = "Bifurcation diagram")
+ax1.plot(mu_values,lyapunov,'b-',lw=1,label = "Lyapunov exponent")
+ax1.grid('on')
+ax1.set_ylim(-1,1)
+ax1.set_xlabel('$mu$')
+ax1.legend(loc ='best')
+ax1.set_title('Lyapunov exponent vs Bifurcation diagram')
+plt.show()
+#juz na prawo od jedynki mamy chaos to mowi wykladnik Lyapunova na sumie wąskich przedziałów
+```
+Wykładnik Lapunowa jest większy od 0 w miejscach, gdzie występuje chaos. Gdy wykładnik równa się 0 to występuje bifurkacja a, gdy wykładnik jest mniejszy od 0 to układ ma stabilne punkty okresowe.
+
+Dla naszego $\mu = \frac{7}{4}$ wykładnik Lapunowa jest większy od 0 co potwierdza to, że układ dla tego $\mu$ jest chaotyczny.
+
+
+# ZADANIE 3
+
+Wygeneruj diagram bifurkacji dla funkcji:
+
+$G(x, \beta) = e^{-5x^{2}} + \beta$
+
+przyjmując $x_{0}$ = 0.1. Zaproponuj wartość parametru $\beta$ , dla którego układ zachowuje się chaotycznie. Wyświetl fragment oribity $G^{200}, \cdots , G^{220}$.
+
+**Rozwiązanie**
+
+```{python}
+from math import e
+
+def gauss(alpha, beta, x):
+    return e**(-alpha*x**2) + beta
+alpha = 5
+
+y = []
+beta_values = np.linspace(-1, 1, 2000)
+for beta in beta_values:
+    x = 0.1
+    for i in range(500):
+        x = gauss(alpha, beta, x)
+    for i in range(50):
+        x = gauss(alpha, beta, x)
+        y.append([beta, x])
+y = np.array(y)
+fig = plt.figure()
+plt.plot(y[:, 0], y[:, 1], 'k.', ms = 0.02)
+plt.xlabel('$\\beta$', fontsize = 10)
+plt.ylabel('x', fontsize = 10)
+plt.tick_params(labelsize = 10)
+plt.show()
+```
+
+Jest tu pewne zachowanie chaotyczny dla $\beta = -0.5$ i $\alpha = 5$. Są dwa przedziały chaosu i pewne przerwy między nimi.
+
+```{python}
+def f(x,beta):
+  return e**(-5*x**2) + beta
+num_points = 16000
+#potem bedzie rozszerzana o wykladniki Lyapunova
+lyapunov = []
+#y beda mialy info potzrebne do narysowania diagramu bifurkacji
+y = []
+beta_min, beta_max = -1,1
+mult = (beta_max - beta_min)*num_points
+beta_values = np.arange(beta_min,beta_max,20/num_points) 
+for beta in beta_values:
+#punkt poczatkowy dla orbity, byle nie wybrac punktu stalego
+  x = 0.1
+  log = []
+  for i in range(100):
+    x = f(x,beta)
+    log.append(np.log(abs(e**(-5*x**2)*10*x)))
+  lyapunov.append(np.mean(log)) #usredniamy te logarytmy z listy log
+  for t in range(20):
+    x = f(x,beta)
+    y.append(x)
+fig = plt.figure(figsize = (10,7))
+ax1 = fig.add_subplot(1,1,1) 
+xticks = np.linspace(beta_min,beta_max,mult) #mult - liczba argumentów
+zero = [0]*mult
+ax1.plot(xticks, zero,'k-',lw=3)
+ax1.plot(xticks,y,'r.',alpha=0.3,label = "Bifurcation diagram")
+ax1.plot(beta_values,lyapunov,'b-',lw=1,label = "Lyapunov exponent")
+ax1.grid('on')
+ax1.set_ylim(-1,1.5)
+ax1.set_xlabel('$\\beta$')
+ax1.legend(loc ='best')
+ax1.set_title('Gaussian map vs Lyapunov exponent')
+plt.show()
+```
+W naszym przypadku wykładnik Lapunowa jest większy od 0 dla $\beta$ z przedziału od około -0.6 do -0.35.
+
+Fragment oribity $G^{200}, \cdots , G^{220}$.
+```{python}
+alpha = 5
+
+y = []
+beta_values = np.linspace(-1, 1, 2000)
+for beta in beta_values:
+    x = 0.1
+    for i in range(199):
+        x = gauss(alpha, beta, x)
+    for i in range(21):
+        x = gauss(alpha, beta, x)
+        y.append([beta, x])
+y = np.array(y)
+fig = plt.figure()
+plt.plot(y[:, 0], y[:, 1], 'k.', ms = 0.02)
+plt.xlabel('$\\beta$', fontsize = 10)
+plt.ylabel('x', fontsize = 10)
+plt.tick_params(labelsize = 10)
+plt.show()
+```
+
+
+# ZADANIE 4
+
+Przeprowadź grę w chaos, generując trójkąt Sierpińskiego. Zamiast środków odcinków użyj jawnych wzorów na kontrakcje oraz prawdopodobieństwa z rozkładu klasycznego.
+Używając stałych Lipschitza zastosowanych kontrakcji, podaj wartość wymiaru fraktalnego uzyskanego zbioru.
+
+$f_{1}$, $f_{2}$, $f_{3}$ - wzory na kontrakcje, gdzie $f_{i} : X -> X$, $X = [0,1]^{2}$
+
+```{python}
+from math import sqrt
+def f1(x,y):
+    return (x/2, y/2)
+def f2(x,y):
+    return ((x+1)/2, y/2)
+def f3(x,y):
+    return ((x+1/2)/2, (y+sqrt(3)/2)/ 2)
+```
+$p_{i}$ - prawdopodobieństwa z jakimi losowane są kontrakcje. Przyjmujemy rozkład klasyczny, czyli $p_{i} = \frac{1}{3}$.
+
+```{python}
+IFS = [f1, f2, f3]
+num = 300000
+width = height = 10000
+trojkat = np.zeros((width, height)) 
+x, y = 0,0
+for i in range(num):
+    f = np.random.choice(IFS, p = [1/3, 1/3, 1/3]) 
+    x, y = f(x, y)
+    cx, cy = int(width/2+x*width/10), int(y*height/10)
+    trojkat[cy, cx] = 1
+```
+
+```{python}
+import matplotlib.cm as cm
+fig, ax = plt.subplots(figsize = (12,12))
+plt.imshow(trojkat[::-1, :], cmap = cm.Greens)
+plt.xlim(5000,6000)
+plt.ylim(10000,9000)
+plt.show()
+#ax.axis('off')
+```
+Wymiar samopodobieństwa wyraża się wzorem:
+
+$dim_{ss}(X) = \frac{log(s)}{log(\frac{1}{L})}$,
+
+gdzie:
+
+$X$ jest zbiorem samopodobnym, tzn. jest atraktorem $IFS = \{f_{1}, \cdots ,f_{s} \}$ 
+
+$L$ jest stałą Lipschitza (skalą podobieństwa)
+
+W naszym przypadku:
+
+$L = \frac{1}{2}$ a $s = 3$. 
+
+```{python}
+from math import log
+s = 3
+L = 0.5
+dimss = log(s) / log(1/L)
+print('Wymiar fraktalny: ', dimss)
+```
+
