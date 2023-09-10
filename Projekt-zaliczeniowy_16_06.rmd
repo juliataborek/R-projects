@@ -1,0 +1,322 @@
+---
+title: "Projekt zaliczeniowy"
+author: "Julia Taborek & Natalia Machlus"
+date: "2023-05-31"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+library(GGally)
+library(tidyr)
+library(ResourceSelection)
+library(statmod)
+```
+# Zbiór danych
+
+*Kontekst*
+
+Choroby sercowo-naczyniowe (CVD) są najczęstszą przyczyną zgonów na świecie, pochłaniając rocznie około 17,9 miliona istnień ludzkich, co stanowi 31% wszystkich zgonów na świecie. Cztery z 5 zgonów z powodu CVD są spowodowane atakami serca i udarami, a jedna trzecia tych zgonów następuje przedwcześnie u osób poniżej 70 roku życia. Niewydolność serca jest częstym zdarzeniem powodowanym przez choroby sercowo-naczyniowe, a ten zestaw danych zawiera 11 cech, które można wykorzystać do przewidywania możliwej choroby serca.
+
+Osoby z chorobami sercowo-naczyniowymi lub osoby z wysokim ryzykiem sercowo-naczyniowym (ze względu na obecność jednego lub więcej czynników ryzyka, takich jak nadciśnienie, cukrzyca, hiperlipidemia lub już stwierdzona choroba) potrzebują wczesnego wykrywania i leczenia, w którym model uczenia maszynowego może być bardzo pomocny.
+
+**Opis zmiennych**
+
+Zbiór zawiera informacje o 918 pacjentach.
+
+Nazwa zmiennej | Opis                                                                        |
+---------------|-----------------------------------------------------------------------------|
+`Age`          | wiek pacjenta [lata]
+|
+`Sex`          | płeć pacjenta [M: Mężczyzna, F: Kobieta] 
+|
+`ChestPainType`| typ bólu w klatce piersiowej [TA: typowa dławica piersiowa, ATA: dławica atypowa, NAP: ból niedławicowy, ASY: bezobjawowy]
+|
+`RestingBP`    | spoczynkowe ciśnienie krwi [mm Hg]                                     
+|
+`Cholesterol`  | cholesterol w surowicy [mm/dl]                             
+|
+`FastingBS`    | poziom cukru we krwi na czczo [1: jeśli na czczo BS > 120 mg/dl, 0: w przeciwnym razie]
+|
+`RestingECG`   | spoczynkowe wyniki elektrokardiogramu [Normalny: prawidłowy, ST: z nieprawidłowym załamkiem ST-T (odwrócenie załamka T i/lub uniesienie lub obniżenie odcinka ST > 0,05 mV), LVH: prawdopodobny lub wyraźny przerost lewej komory według kryteriów Estesa]
+|
+`MaxHR`        | osiągnięta maksymalna częstość akcji serca [wartość liczbowa między 60 a 202]                                                          
+|
+`ExerciseAngina`| dławica wysiłkowa [Y: tak, N: nie]                                      
+|
+`Oldpeak`      | oldpeak = ST odnosi się do charakterystycznego objawu znanego jako "depresja ST", obserwowanego podczas odczytu EKG. Termin "Oldpeak" pochodzi od "segmentu ST" na wykresie EKG, który reprezentuje odcinek między końcem zespołu QRS a początkiem fali T. Obecność depresji ST, zwłaszcza podczas testu wysiłkowego, może wskazywać na niedokrwienie mięśnia sercowego, czyli niewystarczające zaopatrzenie serca w utlenowaną krew. [Wartość liczbowa mierzona w depresji]                        
+|
+`ST_Slope`     | nachylenie odcinka ST ćwiczenia szczytowego [Up: upsloping, Flat: flat, Down: downsloping]                     
+|
+`HeartDisease` |klasa wyjściowa [1: choroba serca, 0: normalna]                  
+|
+
+
+**Źródło**
+
+https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction
+
+```{r}
+data <- read.csv("C:/Users/julia/Documents/studia/semestr 6/wstęp do uogólnionych modeli liniowych/heart.csv")
+
+#data <- read.csv("C:/Users/C:/Users/natal/Desktop/Modele_liniowe/projekt/Dane//heart.csv")
+```
+
+
+**Struktura danych**
+
+Mamy do czynienia zarówno z danymi numerycznymi (zmienne `Age`, `Oldpeak`, `RestingBP`, `Cholesterol`, `MaxHR`) jak i tekstowymi(`ExerciseAngina `, `Sex`, `ChestPainType`,`ST_Slope`, `RestingECG`)
+
+
+
+```{r}
+columns <- c("Sex", "ExerciseAngina", "ChestPainType","ST_Slope","RestingECG")
+
+# Get unique values for the specified columns
+unique_columns <- lapply(data[columns], unique)
+
+# Print unique values for the specified columns
+for (i in seq_along(unique_columns)) {
+  cat("Unique values in column", names(unique_columns)[i], ":", "\n")
+  print(unique_columns[[i]])
+  cat("\n")
+}
+
+```
+```{r}
+column_mapping <- list(
+  Sex = c("M" = 1, "F" = 0),
+  ExerciseAngina = c("N" = 0, "Y" = 1),
+  ChestPainType = c("ATA" = 0, "NAP" = 1, "ASY" = 2, "TA" = 3),
+  ST_Slope = c("Up" = 0, "Flat" = 1, "Down" = 2),
+  RestingECG = c("Normal" = 0, "ST" = 1, "LVH" = 2)
+)
+
+# Convert the values in each column to numeric based on the mapping
+for (col_name in names(column_mapping)) {
+  data[[col_name]] <- column_mapping[[col_name]][data[[col_name]]]
+}
+```
+
+```{r}
+data <- data %>% mutate(Sex = factor(Sex),
+                        ExerciseAngina = factor(ExerciseAngina),
+                        ChestPainType = factor(ChestPainType),
+                        ST_Slope = factor(ST_Slope), 
+                        RestingECG = factor(RestingECG))
+summary(data, useNA = "always")
+```
+Zamieniamy wartości odstające na NA: 
+```{r}
+data$Cholesterol[data$Cholesterol == 0] <- NA
+data$Cholesterol[data$Cholesterol > 400] <- NA
+```
+
+Widzimy że analiza została przeprowadzona dla osób w wieku od 28 do 77 lat. W eksperymencie mamy przeważającą liczbę kobiet. Zmienna przewidywana ("HeartDisease") jest zbalansowana - w przypadku 508 pacjentów wykryto chorobę serca.
+
+**Eksploracyjna analiza danych**
+
+```{r}
+ggplot(data,aes(x=Age,fill=factor(HeartDisease)))+geom_histogram()
+```
+
+```{r}
+ggplot(data,aes(x=MaxHR,fill=factor(HeartDisease)))+geom_histogram()
+```
+
+```{r}
+ggpairs(data)
+```
+
+# Hipoteza 1: występowanie choroby serca zależy od osiągniętej maksymalnej częstość akcji serca (MaxHR)
+
+```{r}
+ggplot(data, aes(x = MaxHR, y = HeartDisease)) + geom_point() + geom_smooth(method = "loess")
+```
+```{r}
+model.hr <- glm(HeartDisease ~ MaxHR, data, family = binomial)
+summary(model.hr)
+```
+**Interpretacja współczynników**. Współczynniki pokazują, że zerowy poziom maksymalnej częstości akcji serca jest powiązany z szansami przeżycia równymi $\exp(5.330210) = 206.4813$ (co daje prawdopodobieństwo przeżycia równe 0.99). Warto jednak dodać, że takie poziomy maksymalnej częstości akcji serca nie występują w praktyce. W naszym zbiorze danych najniższy zarejestrowany poziom wynosi 60. 
+
+Ponadto jednostkowy wzrost poziomu maksymalnej częstości akcji serca  jest powiązany z $\exp( -0.037043) = 0.9636347$-krotnym spadkiem szans przeżycia. 
+
+Predyktor MaxHR jest istotny statystycznie, jednak na podstawie dewiancji resztowej i liczby stopni swobody możemy stwierdzić zjawisko występowania nadmiernej dyspersji. Co może oznaczać, że estymacje parametrów i przewidywane wartości prawdopodobieństwa mogą być niestabilne. 
+
+Przeprowadzamy testy Hosmera-Lameshowa:
+```{r}
+hoslem.test(model.hr$y, fitted(model.hr))
+```
+P-value przyjmuje wartość graniczną - 0.05, więc nie możemy wnioskować, że model jest dobrze dopasowany.
+
+Wykresy diagnostyczne:
+```{r}
+par(mfrow=c(2,2))
+plot(model.hr)
+
+```
+Na 1 wykresie możemy zaobserwować punkty układające się w 2 proste poziome. Prosta, dla której reszty są dodatnie odpowiada osobom z chorobom serca, natomiast ta o resztach ujemnych odpowiada osobom zdrowym. Z ostatniego wykresy wynika, że nie ma punktów odstających.
+
+
+Sprawdzamy, czy dodanie predykatora związanego z wiekiem poprawi dopasowanie modelu:
+
+```{r}
+model.hr2 <- glm(HeartDisease ~ MaxHR + Age, data, family = binomial)
+summary(model.hr2)
+```
+Możemy zaobserwować niewielką poprawę parametrów modelu: mniejsze AIC niż w poprzednim przypadku, mniejsza dewiancja resztowa. Oba predyktory są istotne statystycznie. 
+
+```{r}
+hoslem.test(model.hr2$y, fitted(model.hr2))
+```
+Test Hosmera-Lemeshowa wskazuje na dobre dopasowanie modelu. 
+
+```{r}
+par(mfrow=c(2,2))
+plot(model.hr2)
+
+```
+W tym przypadku również nie ma wartości odstających, pozostałe wykresy wyglądają podobnie.
+
+Spośród badanych modeli, ten uwzględniający wiek okazał się lepszy.
+
+# Drugi zbiór danych
+
+
+**Kontekst**
+
+Ta baza danych zawiera 76 atrybutów, ale wszystkie opublikowane eksperymenty odnoszą się do użycia podzbioru 14 z nich. Pole „target” odnosi się do obecności choroby serca u pacjenta. Jest to liczba całkowita 0 = brak/mniejsze prawdopodobieństwo zawału serca i 1 = większe prawdopodobieństwo zawału serca.
+
+**Opis zmiennych**
+
+Zbiór zawiera informacje o 303 pacjentach.
+
+Nazwa zmiennej | Opis                                                                        |
+---------------|-----------------------------------------------------------------------------|
+`age`          | wiek pacjenta [lata]
+|
+`sex`          | płeć pacjenta [1: Mężczyzna, 0: Kobieta] 
+|
+`cp`           | typ bólu w klatce piersiowej [wartości: 0,1,2,3]
+|
+`trestbps`    | spoczynkowe ciśnienie krwi [mm Hg]                                     
+|
+`chol`  | cholesterol w surowicy [mm/dl]                             
+|
+`fbs`    | poziom cukru we krwi na czczo [1: jeśli > 120 mg/dl, 0: w przeciwnym razie]
+|
+`restecg`   | spoczynkowe wyniki elektrokardiogramu [wartości 0,1,2]
+|
+`thalach`        | osiągnięte maksymalne tętno                                                          
+|
+`exang`| dławica wysiłkowa [1: tak, 0: nie]                                      
+|
+`oldpeak`      | Obniżenie odcinka ST wywołane wysiłkiem fizycznym w stosunku do odpoczynku                  
+|
+`slope`     | nachylenie szczytowego odcinka ST podczas ćwiczenia                  
+|
+`ca` |liczba głównych naczyń  zabarwionych metodą fluorosopii [wartości od 0 do 3]                   
+|
+`thal`     | 0 = normalny; 1 = usunięta usterka; 2 = wada odwracalna                    
+|
+`target` |klasa wyjściowa [0 = mniejsze prawdopodobieństwo zawału serca 1 = większe prawdopodobieństwo zawału serca]   
+
+
+**Źródło**
+
+https://www.kaggle.com/datasets/nareshbhat/health-care-data-set-on-heart-attack-possibility
+
+```{r}
+data2 <- read.csv("C:/Users/julia/Documents/studia/semestr 6/wstęp do uogólnionych modeli liniowych/heart2.csv")
+
+#data2 <- read.csv("C:/Users/natal/Desktop/Modele_liniowe/projekt/Dane/heart2.csv")
+```
+
+```{r}
+data2$sex <- factor(data2$sex)
+summary(data2)
+```
+**Eksploracyjna analiza zmiennych**
+```{r}
+ggplot(data2,aes(x=thalach,fill=factor(target)))+geom_histogram()
+```
+
+
+```{r}
+ggpairs(data2)
+```
+#Hipoteza 2: większa szansa zawału serca zależy od osiągniętego maksymalnego tętna (thalach)
+
+```{r}
+ggplot(data2, aes(x = thalach, y = target)) + geom_point() + geom_smooth(method = 'loess')
+```
+```{r}
+model.target <- glm(target ~ thalach, data = data2, family = binomial)
+summary(model.target)
+```
+**Interpretacja współczynników**. Współczynniki pokazują, że zerowy poziom maksymalnego tętna serca jest powiązany z szansami przeżycia równymi $\exp(-6.391452) = 0.001675821$ (co daje prawdopodobieństwo przeżycia równe 0.001673017). Warto jednak dodać, że takie poziomy maksymalnego tętna serca nie występują w praktyce. W naszym zbiorze danych najniższy zarejestrowany poziom wynosi 71. 
+
+Ponadto jednostkowy wzrost poziomu maksymalnego tętna serca  jest powiązany z $\exp( 0.043951) = 1.044931$-krotnym wzrostem szans przeżycia. 
+
+Predyktor ten jest istotny statystycznie, jednak na podstawie dewiancji resztowej i liczby stopni swobody możemy stwierdzić zjawisko występowania nadmiernej dyspersji. Co może oznaczać, że estymacje parametrów i przewidywane wartości prawdopodobieństwa mogą być niestabilne. 
+
+Przeprowadzamy testy Hosmera-Lameshowa:
+
+```{r}
+hoslem.test(model.target$y, fitted(model.target))
+```
+Z przeprowadzanego testu możemy wnioskować dobre dopasowanie modelu.
+
+```{r}
+par(mfrow=c(2,2))
+plot(model.target)
+```
+Na podstawie ostatniego wykresu widzimy, że nie ma obserwacji odstających.
+
+```{r}
+cor(data2$target, as.numeric(data2$sex))
+cor(data2$target, data2$oldpeak)
+```
+Prawdopodobieństwo zawału w zależności od płci:
+
+```{r}
+data2 %>%
+  group_by(sex) %>%
+  summarise(outcome_mean = mean(as.numeric(as.character(target)), na.rm = TRUE))
+```
+Na powyższe prawdopodobieństwa może wpływać fakt, że zmienna sex jest niezbalansowana (przewaga mężczyzn 2:1).
+Tabela kontengencji ze względu na płeć i zawał:
+```{r}
+xtabs(~ sex + target, data = data2)
+```
+
+
+Sprawdzamy czy dodanie zmiennych "oldpeak" oraz "sex" poprawi dopasowanie modelu:
+
+```{r}
+model.target2 <- glm(target ~ thalach + oldpeak + sex, data = data2, family = binomial)
+summary(model.target2)
+```
+Zarówno zmienna oldpeak jak i zmienna sex zostały uzanne za istotne statystycznie. Wraz ze wzrostem wartości zmiennej oldpeak szanse zawału maleją. Dodatkowo szanse na zawał są mniejsze dla mężczyzn. Jak widać wartość dewiancji resztowej znacznie się zmniejszyła, jest bliska liczbie stopni swobody.
+
+Test Hosmera-Lemeshowa:
+
+```{r}
+hoslem.test(model.target2$y, fitted(model.target2))
+
+```
+P-value się zwiększyło także tym bardziej możemy wnioskować, że model jest dobry.
+
+```{r}
+par(mfrow=c(2,2))
+plot(model.target2)
+```
+Na podstawie ostatniego wykresu widzimy, że nie ma obserwacji odstających.
+
+# Wnioski
+W przypadku obydwu zbiorów danych zmienna odpowiadająca maksymalnej częstości serca (1 zbiór - MaxHR, 2 zbiór - thalach) okazała się istotna statystycznie jako predykator zarówno choroby serca jak i zawału serca. Jednak niewystarczająca do zbudowania dobrze dopasowanego modelu. 
+
