@@ -1,0 +1,101 @@
+---
+title: "Projekt zaliczeniowy"
+author: "Julia Taborek & Natalia Machlus"
+date: "2023-05-31"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(emmeans)
+library(GGally)
+library(tidyr)
+library(ResourceSelection)
+library(statmod)
+```
+# Zbiór danych
+*Kontekst*
+Choroby sercowo-naczyniowe (CVD) są najczęstszą przyczyną zgonów na świecie, pochłaniając rocznie około 17,9 miliona istnień ludzkich, co stanowi 31% wszystkich zgonów na świecie. Cztery z 5 zgonów z powodu CVD są spowodowane atakami serca i udarami, a jedna trzecia tych zgonów następuje przedwcześnie u osób poniżej 70 roku życia. Niewydolność serca jest częstym zdarzeniem powodowanym przez choroby sercowo-naczyniowe, a ten zestaw danych zawiera 11 cech, które można wykorzystać do przewidywania możliwej choroby serca.
+
+Osoby z chorobami sercowo-naczyniowymi lub osoby z wysokim ryzykiem sercowo-naczyniowym (ze względu na obecność jednego lub więcej czynników ryzyka, takich jak nadciśnienie, cukrzyca, hiperlipidemia lub już stwierdzona choroba) potrzebują wczesnego wykrywania i leczenia, w którym model uczenia maszynowego może być bardzo pomocny.
+
+*Opis zmiennych*
+Zbiór zawiera informacje o 918 pacjentach.
+
+Nazwa zmiennej | Opis                                                                        |
+---------------|-----------------------------------------------------------------------------|
+`Age`          | wiek pacjenta [lata]
+|
+`Sex`          | płeć pacjenta [M: Mężczyzna, F: Kobieta] 
+|
+`ChestPainType`| typ bólu w klatce piersiowej [TA: typowa dławica piersiowa, ATA: dławica atypowa, NAP: ból niedławicowy, ASY: bezobjawowy]
+|
+`RestingBP`    | spoczynkowe ciśnienie krwi [mm Hg]                                     
+|
+`Cholesterol`  | cholesterol w surowicy [mm/dl]                             
+|
+`FastingBS`    | poziom cukru we krwi na czczo [1: jeśli na czczo BS > 120 mg/dl, 0: w przeciwnym razie]
+|
+`RestingECG`   | spoczynkowe wyniki elektrokardiogramu [Normalny: prawidłowy, ST: z nieprawidłowym załamkiem ST-T (odwrócenie załamka T i/lub uniesienie lub obniżenie odcinka ST > 0,05 mV), LVH: prawdopodobny lub wyraźny przerost lewej komory według kryteriów Estesa]
+|
+`MaxHR`        | osiągnięta maksymalna częstość akcji serca [wartość liczbowa między 60 a 202]                                                          
+|
+`ExerciseAngina`| dławica wysiłkowa [Y: tak, N: nie]                                      
+|
+`Oldpeak`      | oldpeak = ST [Wartość liczbowa mierzona w depresji]                        
+|
+`ST_Slope`     | nachylenie odcinka ST ćwiczenia szczytowego [Up: upsloping, Flat: flat, Down: downsloping]                     
+|
+`HeartDisease` |klasa wyjściowa [1: choroba serca, 0: normalna]                    
+|
+
+
+*Źródło*
+https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction
+
+```{r}
+data <- read.csv("C:/Users/julia/Documents/studia/semestr 6/wstęp do uogólnionych modeli liniowych/heart.csv")
+```
+
+#Struktura danych
+
+```{r}
+summary(data)
+```
+#Próbne modele
+```{r}
+ggplot(data, aes(x = Oldpeak, y = HeartDisease)) + geom_point() + geom_smooth(method = "loess")
+```
+Będzie źle dopasowany model bo nie monotonistyczna krzywa.
+
+
+```{r}
+ggplot(data, aes(x = MaxHR, y = HeartDisease)) + geom_point() + geom_smooth(method = "loess")
+```
+
+
+```{r}
+cor(data$HeartDisease, data$MaxHR)
+```
+Najlepsze predyk num to Oldpeak i MaxHR
+
+```{r}
+model.hr <- glm(HeartDisease ~ MaxHR, data, family = binomial)
+summary(model.hr)
+```
+
+```{r}
+hoslem.test(model.hr$y, fitted(model.hr))
+```
+
+
+```{r}
+model.old <- glm(HeartDisease ~ Oldpeak, data, family = binomial)
+summary(model.old)
+```
+```{r}
+hoslem.test(model.old$y, fitted(model.old))
+```
+Słabo dopasowany model. chyba?
+
